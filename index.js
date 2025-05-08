@@ -11,9 +11,7 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static('public'));
-app.use(cors({
-  origin: 'http://localhost:5173' // Или '*' для разработки
-}));
+app.use(cors());
 
 // Хранилище результатов (временное)
 const resultsStore = new Map();
