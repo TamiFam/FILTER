@@ -109,7 +109,7 @@
                 // Проверка валидности JSON перед отправкой
                 JSON.parse(content);
                 
-                const response = await fetch('/process', {
+                const response = await fetch('https://filter-r6i2.onrender.com/process', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ queryType, jsonInput: content })
@@ -159,7 +159,7 @@
 
             try {
                 // Получаем полный результат
-                const response = await fetch(`/result/${currentResultId}`);
+                const response = await fetch(`https://filter-r6i2.onrender.com/result/${currentResultId}`);
                 if (!response.ok) throw new Error('Ошибка загрузки данных');
                 
                 const result = await response.json();

@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const { filterJson } = require('./filter');
 const config = require('./config');
 const path = require('path');
+const cors = require('cors')
 
 const app = express();
 
@@ -10,6 +11,9 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static('public'));
+app.use(cors({
+  origin: 'https://filter-r6i2.onrender.com' // Или '*' для разработки
+}));
 
 // Хранилище результатов (временное)
 const resultsStore = new Map();
