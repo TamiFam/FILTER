@@ -12,7 +12,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static('public'));
 app.use(cors({
-  origin: 'https://filter-r6i2.onrender.com' // Или '*' для разработки
+  origin: 'http://localhost:5173' // Или '*' для разработки
 }));
 
 // Хранилище результатов (временное)
