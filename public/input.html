@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Фильтрация JSON</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+       
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <h1>Фильтрация JSON</h1>
+        <p>Загрузите JSON-файл или вставьте данные вручную</p>
+    </div>
+
+    <div id="message" class="hidden"></div>
+
+    <div class="panel">
+        <h2>Исходный JSON</h2>
+        <div class="file-input">
+            <input type="file" id="fileInput" accept=".json,.txt">
+            <p class="info-text" id="fileInfo"></p>
+        </div>
+        <textarea id="jsonInput" class="preview" readonly placeholder="Первые 20 строк JSON будут отображены здесь..."></textarea>
+        <p class="info-text" id="originalStats"></p>
+    </div>
+
+    <div class="panel">
+        <h2>Параметры фильтрации</h2>
+        <select id="queryType">
+            <option value="default">Стандартный</option>
+            <option value="minimal">Минимальный</option>
+        </select>
+        <button id="processBtn">Фильтровать</button>
+    </div>
+
+    <div id="resultPanel" class="panel hidden">
+        <h2>Результат фильтрации</h2>
+        <textarea id="resultPreview" class="preview" readonly placeholder="Результат фильтрации..."></textarea>
+        <p class="info-text" id="resultInfo"></p>
+        <div id="stats" class="stats"></div>
+        <div class="action-buttons">
+            <button id="copyBtn">Копировать результат</button>
+            <button id="newRequestBtn">Новый запрос</button>
+        </div>
+    </div>
+
+    <script>
+        // Текущий результат
+        let currentResult = null;
+        let currentResultId = null;
+
+        // Элементы интерфейса
+        const fileInput = document.getElementById('fileInput');
+        const jsonInput = document.getElementById('jsonInput');
+        const processBtn = document.getElementById('processBtn');
+        const resultPanel = document.getElementById('resultPanel');
+        const resultPreview = document.getElementById('resultPreview');
+        const copyBtn = document.getElementById('copyBtn');
+        const newRequestBtn = document.getElementById('newRequestBtn');
+        const messageEl = document.getElementById('message');
+
+        // Обработка загрузки файла
+        fileInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            // 1. Чистим BOM и невидимые символы
+            const cleanContent = e.target.result
+                .replace(/^\uFEFF/, '')
+                .replace(/\r\n/g, '\n')
+                .trim();
+
+            // 2. Проверяем валидность
+            const json = JSON.parse(cleanContent);
+            fullJsonData = JSON.stringify(json, null, 2); // Форматируем
+            jsonInput.value = fullJsonData; // Показываем весь JSON
+
+        } catch (error) {
+            // 3. Детальный вывод ошибки
+            const position = error.message.match(/position (\d+)/)?.[1] || 'unknown';
+            const problemArea = cleanContent.slice(position - 50, position + 50);
+            console.error(`Ошибка (позиция ${position}):`, error.message);
+            console.error("Контекст:", problemArea);
+        }
+    };
+    reader.readAsText(file, 'UTF-8');
+});
+
+        // Обработка кнопки "Фильтровать"
+        processBtn.addEventListener('click', async function() {
+            const content = jsonInput.value;
+            if (!content) {
+                showMessage('Ошибка: Необходимо загрузить JSON файл', true);
+                return;
+            }
+
+            const queryType = document.getElementById('queryType').value;
+            
+            showMessage('Обработка...', false);
+            processBtn.disabled = true;
+
+            try {
+                // Проверка валидности JSON перед отправкой
+                JSON.parse(content);
+                
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ queryType, jsonInput: content })
+                });
+
+                const data = await handleResponse(response);
+                
+                // Отображаем результат
+                resultPreview.value = data.preview;
+                document.getElementById('resultInfo').textContent = 
+                    `Показано: ${data.preview.split('\n').length} строк`;
+                
+                // Отображаем статистику
+                document.getElementById('stats').innerHTML = `
+                    <strong>Статистика обработки:</strong><br>
+                    - Удалено тегов: ${data.stats.removedTags}<br>
+                    - Символов: было ${data.stats.originalLength} → стало ${data.stats.filteredLength}<br>
+                    - Время обработки: ${data.stats.processingTime} мс<br>
+                    
+                `;
+                
+                // Сохраняем для копирования
+                currentResult = data;
+                currentResultId = data.resultId;
+                
+                // Показываем панель результата
+                resultPanel.classList.remove('hidden');
+                showMessage('Фильтрация выполнена успешно!', false);
+                
+            } catch (error) {
+                showMessage(`Ошибка: ${error.message}`, true);
+                console.error('Ошибка обработки:', error);
+            } finally {
+                processBtn.disabled = false;
+            }
+        });
+
+        // Кнопка "Копировать результат"
+        copyBtn.addEventListener('click', async function() {
+            if (!currentResultId) {
+                showMessage('Нет данных для копирования', true);
+                return;
+            }
+
+            copyBtn.disabled = true;
+            copyBtn.textContent = 'Копирование...';
+
+            try {
+                // Получаем полный результат
+                const response = await fetch(`/result/${currentResultId}`);
+                if (!response.ok) throw new Error('Ошибка загрузки данных');
+                
+                const result = await response.json();
+                const jsonString = JSON.stringify(result, null, 2);
+                
+                // Копируем в буфер
+                await navigator.clipboard.writeText(jsonString);
+                showMessage('Результат скопирован в буфер обмена!', false);
+                
+            } catch (error) {
+                showMessage(`Ошибка копирования: ${error.message}`, true);
+                console.error('Copy error:', error);
+                
+                // Fallback для старых браузеров
+                if (error instanceof TypeError && currentResult?.filtered) {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = JSON.stringify(currentResult.filtered, null, 2);
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    showMessage('Скопировано (через fallback)', false);
+                }
+            } finally {
+                copyBtn.disabled = false;
+                copyBtn.textContent = 'Копировать результат';
+            }
+        });
+
+        // Кнопка "Новый запрос"
+        newRequestBtn.addEventListener('click', function() {
+            resetResult();
+            fileInput.value = '';
+            jsonInput.value = '';
+            resultPanel.classList.add('hidden');
+            document.getElementById('fileInfo').textContent = '';
+            document.getElementById('originalStats').textContent = '';
+        });
+
+        // Вспомогательные функции
+        function showMessage(text, isError) {
+            messageEl.textContent = text;
+            messageEl.className = isError ? 'error' : 'success';
+            messageEl.classList.remove('hidden');
+            setTimeout(() => messageEl.classList.add('hidden'), 5000);
+        }
+
+        function resetResult() {
+            currentResult = null;
+            currentResultId = null;
+        }
+
+        async function handleResponse(response) {
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                throw new Error(text || 'Неверный формат ответа');
+            }
+            
+            const data = await response.json();
+            if (!response.ok || data.error) {
+                throw new Error(data.error || data.message || 'Неизвестная ошибка сервера');
+            }
+            return data;
+        }
+
+        function getDepth(obj) {
+            if (typeof obj !== 'object' || obj === null) return 0;
+            const values = Object.values(obj);
+            return 1 + (values.length ? Math.max(...values.map(getDepth)) : 0);
+        }
+        
+    </script>
+</body>
+</html>
